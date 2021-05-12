@@ -1,0 +1,251 @@
+---
+title: "Capstone Milestone Project"
+author: "tndl"
+date: "04 January 2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+setwd("~/R Scripts")
+```
+
+```{r pckgs, include=FALSE}
+ipak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+# usage
+packages <- c("tidytext", "dplyr", "tm", "quanteda", "wordcloud", "ngram", "tidytext")
+ipak(packages)
+```
+
+#Capstone Milestone Project
+
+## Introduction
+
+This document aims to explain some features from the English Twitter, blogs and news datasets by providing a basic report of the datasets.
+* Culled from Coursera Capstone Project from the Data Science Specialization
+
+Link to GitHub: <https://github.com/ThandoNdl/datasciencecoursera/blob/master/PML%20Report.Rmd>
+
+## Data Preparation
+
+### Load the data
+
+```{r echo=TRUE}
+load_data = function(file_name){
+  
+  con = file(file_name, "r")
+  text_file = readLines(con, encoding = "UTF-8", skipNul = TRUE, warn = FALSE)
+  # Load the data as a corpus
+  text_doc <- Corpus(VectorSource(text_file))
+  close(con)
+  
+  return(text_doc)
+}
+
+twitter = load_data("en_US.twitter.txt")
+blogs = load_data("en_US.blogs.txt")
+news = load_data("en_US.news.txt")
+```
+
+## Basic Analysis
+
+### Split Data
+
+Since the sets were quite big, we are going to split them into a training, validation and testing set for both analysis and modeling purposes.
+
+60% of the data will be used for training\
+20% of the data will be used for validation\
+20% of the data will be used for testing\
+
+```{r split_data, include=FALSE}
+
+split_data = function(data, train_prop, test_prop) {
+  
+  len = length(data)
+  train_vol = ceiling(len*train_prop)
+  test_vol = ceiling(len*test_prop)
+  valid_vol = len - train_vol - test_vol
+  
+  split_ind <- as.factor(c(rep('Train',train_vol), 
+                    rep('Test',test_vol),
+                    rep('Valid',valid_vol)
+                    ))  
+  set.seed(123)
+  split_set <- split(data,split_ind)
+  
+  return(split_set)
+  
+}
+
+train_prop = 0.6
+test_prop = 0.2
+
+twitter_split = split_data(twitter, train_prop, test_prop)
+blogs_split = split_data(blogs, train_prop, test_prop)
+news_split = split_data(news, train_prop, test_prop)
+
+```
+
+### Data Cleaning
+
+Some basic data cleaning was performed on the text to remove multiple spaces, ensure all letters are in the same case, remove numbers and punctuation, as well as removing some common English stopwords, for example, articles.
+
+```{r data_clean, echo=TRUE, warning=FALSE}
+
+text_clean = function(data){
+  
+  clean_text <- Corpus(VectorSource(data))
+  
+# Cleaning corpus
+  clean_text <- tm_map(clean_text, stripWhitespace)
+  clean_text <- tm_map(clean_text, content_transformer(tolower))
+  clean_text <- tm_map(clean_text, removeNumbers)
+  clean_text <- tm_map(clean_text, removePunctuation)
+  clean_text <- tm_map(clean_text, removeWords, stopwords("english"))
+  
+  return(clean_text)
+}
+
+twitter_clean = text_clean(twitter_split$Train)
+blogs_clean = text_clean(blogs_split$Train)
+news_clean = text_clean(news_split$Train)
+
+```
+
+### Bag of Words
+
+Word counts are calculated and graphs of the 10 most common words will be shown.
+
+```{r term_doc, include=FALSE}
+
+word_counts = function(data) {
+  # Build a term-document matrix
+  text_doc <- as.matrix(TermDocumentMatrix(data))
+  # Sort by decreasing value of frequency
+  sum_words <- sort(rowSums(text_doc),decreasing=TRUE)
+  sum_words <- data.frame(word = names(sum_words),freq=sum_words)
+  # Display the top 5 most frequent words
+  return(sum_words)
+}
+
+twitter_count = word_counts(twitter_clean)
+blogs_count = word_counts(blogs_clean)
+news_count = word_counts(news_clean)
+
+```
+
+```{r plot_top_5, echo=FALSE}
+
+plot_top_10 = function(data, name, color) {
+  # Plot the most frequent words
+barplot(data[1:10,]$freq, las = 2, names.arg = data[1:10,]$word,
+        col =color, main =paste0("Top 10 most frequent words for ", name),
+        ylab = "Word frequencies")
+}
+
+twitter_top = plot_top_10(twitter_count, "Twitter", "deepskyblue")
+blogs_top = plot_top_10(blogs_count, "Blogs", "magenta3")
+news_top = plot_top_10(news_count, "News", "gold")
+
+
+```
+
+#### Word clouds
+
+```{r generate_word_cloud, echo=FALSE}
+#generate word cloud
+plot_word_cloud = function(data, min_freq, name) {
+  set.seed(1234)
+  wordcloud(words = data$word, freq = data$freq, min.freq = min_freq, main = paste0("Word Cloud for ", name),
+          max.words=100, random.order=FALSE, rot.per=0.40, 
+          colors=brewer.pal(8, "Dark2"))
+}
+
+twitter_cloud = plot_word_cloud(twitter_count, 20000, "Twitter")
+blog_cloud = plot_word_cloud(blogs_count, 20000, "Blogs")
+news_cloud = plot_word_cloud(news_count, 20000, "News")
+```
+
+### String Summary
+
+Below is the summaries of the text files
+
+```{r string_summary, echo=FALSE}
+
+twitter_str <- concatenate (lapply(twitter_clean , "[", 1) )
+blogs_str <- concatenate (lapply(blogs_clean , "[", 1) )
+news_str <- concatenate (lapply(news_clean , "[", 1) )
+```
+##### Twitter String Summary
+```{r echo=FALSE}
+string.summary(twitter_str)
+```
+##### Blogs String Summary
+```{r echo=FALSE}
+string.summary(blogs_str)
+```
+##### News String Summary
+```{r echo=FALSE}
+string.summary(news_str)
+```
+
+## Next Steps
+
+Further exploratory analysis will have to be done.
+It would be interesting to see if phrases or strings of words occur frequently.
+
+### n-gram 
+
+An n-gram is simply any sequence of n words which helps capture more context around each word. 
+
+Below are the 2 word phrases that appear most frequently.
+
+```{r get_n_grams, echo=FALSE}
+
+n_grams = function(data_str, num) {
+ ng = ngram(data_str , n =num)
+ return(get.phrasetable(ng))
+}
+```
+##### Twitter 2-gram
+```{r echo=FALSE}
+twitter_2_seq = n_grams(twitter_str,2)
+twitter_2_seq[1:10,]
+```
+##### Blogs 2-gram
+```{r echo=FALSE}
+blogs_2_seq = n_grams(blogs_str,2)
+blogs_2_seq[1:10,]
+```
+##### News 2-gram
+```{r echo=FALSE}
+news_2_seq = n_grams(news_str,2)
+news_2_seq[1:10,]
+```
+
+Below are the 3 word phrases that appear most frequently.
+
+##### Twitter 3-gram
+```{r echo=FALSE}
+twitter_3_seq = n_grams(twitter_str,3)
+twitter_3_seq[1:10,]
+```
+##### Blogs 3-gram
+```{r echo=FALSE}
+blogs_3_seq = n_grams(blogs_str,3)
+blogs_3_seq[1:10,]
+```
+##### News 3-gram
+```{r echo=FALSE}
+news_3_seq = n_grams(news_str,3)
+news_3_seq[1:10,]
+```
+
+After further explorations, one would have to build a predictive model on the data to predict the next word.
